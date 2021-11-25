@@ -282,48 +282,47 @@ def tindermovie(request):
 # DB 구성 페이지
 @api_view(['GET'])
 def create(request):
-    pass
-    # API_KEY = "41c1e2697868f05090a2fb5fd80bad45"
+    API_KEY = "41c1e2697868f05090a2fb5fd80bad45"
 
-    # url = f'https://api.themoviedb.org/3/genre/movie/list?api_key={API_KEY}&language=ko-KR'
-    # movie_response = requests.get(url).json()
+    url = f'https://api.themoviedb.org/3/genre/movie/list?api_key={API_KEY}&language=ko-KR'
+    movie_response = requests.get(url).json()
 
-    # for tmdb_movie in movie_response['genres']:
-    #     if len(Genre.objects.all()) == 13:
-    #         break
-    #     if tmdb_movie['id'] in [99, 36, 10402, 10770, 10752, 37]:
-    #         continue
-    #     genre = Genre()
-    #     genre.genre_id = tmdb_movie['id']
-    #     genre.name = tmdb_movie['name']
-    #     genre.save()
+    for tmdb_movie in movie_response['genres']:
+        if len(Genre.objects.all()) == 13:
+            break
+        if tmdb_movie['id'] in [99, 36, 10402, 10770, 10752, 37]:
+            continue
+        genre = Genre()
+        genre.genre_id = tmdb_movie['id']
+        genre.name = tmdb_movie['name']
+        genre.save()
 
-    # for i in range(1, 16):
-    #     if len(Movie.objects.all()) == 300:
-    #         break
-    #     url = f'https://api.themoviedb.org/3/movie/popular?api_key={API_KEY}&language=ko-KR&page={i}&region=KR'
-    #     movie_response = requests.get(url).json()
-    #     for tmdb_movie in movie_response['results']:
-    #         movie = Movie()
-    #         movie.title = tmdb_movie['title']
-    #         movie.movie_id = tmdb_movie['id']
-    #         movie.adult = tmdb_movie['adult']
-    #         movie.overview = tmdb_movie['overview']
-    #         movie.score = tmdb_movie['vote_average']
-    #         movie.score_count = 10
-    #         movie.origin_score = movie.score
-    #         movie.release_date = tmdb_movie['release_date']
-    #         movie.poster_path = tmdb_movie['poster_path']
-    #         movie.save()
+    for i in range(1, 16):
+        if len(Movie.objects.all()) == 300:
+            break
+        url = f'https://api.themoviedb.org/3/movie/popular?api_key={API_KEY}&language=ko-KR&page={i}&region=KR'
+        movie_response = requests.get(url).json()
+        for tmdb_movie in movie_response['results']:
+            movie = Movie()
+            movie.title = tmdb_movie['title']
+            movie.movie_id = tmdb_movie['id']
+            movie.adult = tmdb_movie['adult']
+            movie.overview = tmdb_movie['overview']
+            movie.score = tmdb_movie['vote_average']
+            movie.score_count = 10
+            movie.origin_score = movie.score
+            movie.release_date = tmdb_movie['release_date']
+            movie.poster_path = tmdb_movie['poster_path']
+            movie.save()
 
-    # movies = Movie.objects.all()
-    # genres = Genre.objects.all()
-    # for move in movies:
-    #     url = f'https://api.themoviedb.org/3/movie/{move.movie_id}?api_key=41c1e2697868f05090a2fb5fd80bad45&language=ko-KR'
-    #     movie_response = requests.get(url).json()
-    #     for tmdb in movie_response['genres']:
-    #         for gen in genres:
-    #             if tmdb['name'] == gen.name:
-    #                 gen.movies.add(move.id)
-    # serializer = MovieSerializer(movies, many=True)
-    # return Response(serializer.data)
+    movies = Movie.objects.all()
+    genres = Genre.objects.all()
+    for move in movies:
+        url = f'https://api.themoviedb.org/3/movie/{move.movie_id}?api_key=41c1e2697868f05090a2fb5fd80bad45&language=ko-KR'
+        movie_response = requests.get(url).json()
+        for tmdb in movie_response['genres']:
+            for gen in genres:
+                if tmdb['name'] == gen.name:
+                    gen.movies.add(move.id)
+    serializer = MovieSerializer(movies, many=True)
+    return Response(serializer.data)
