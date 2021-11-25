@@ -24,7 +24,7 @@ def review_cnt(request):
 # page 게시글 조회 (paginator)
 @api_view(['GET'])
 def review_list(request):
-    reviews = get_list_or_404(Review)
+    reviews = get_list_or_404(Review.objects.order_by('-pk'))
     paginator = Paginator(reviews, 10)
     page_num = request.GET.get("page")
     page_obj = paginator.get_page(page_num)

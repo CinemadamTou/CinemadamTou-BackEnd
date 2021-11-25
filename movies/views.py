@@ -15,28 +15,58 @@ from django.utils.dateformat import DateFormat
 from django.contrib.auth import get_user_model
 import random
 
-# @api_view(['POST'])
-# def research(request):
-#     user = get_object_or_404(get_user_model(), username=request.user)
-#     movies = reqeust.data
-#     for movie in movies:
-#         url = f'https://api.themoviedb.org/3/movie/{movie.movie_id}/recommendations?api_key=41c1e2697868f05090a2fb5fd80bad45&language=ko-KR&page=1'
-#         res = requests.get(url)
-#         recomovies = res.json().get('results')
-#         movies = get_list_or_404(Movie)
-#         for recomovie in recomovies:
-#             if Movie.objects.filter(movie_id=recomovie['id']).exists():
-#                 td_movie = get_object_or_404(Movie, movie_id=recomovie['id'])
-#                 recogenres = td_movie.genres
-#                 for recogenre in recogenres:
-#                     user.user_genres[str(recogenre)] += 1
-#     return Response(status=status.HTTP_201_CREATED)
+# 유저 취향 분석 및 추천 영화 저장
+@api_view(['POST'])
+def research(request):
+    user = request.user
+    likemovies = request.data['tinderLikes']
+    for movie in likemovies:
+        url = f'https://api.themoviedb.org/3/movie/{movie}/recommendations?api_key=41c1e2697868f05090a2fb5fd80bad45&language=ko-KR&page=1'
+        res = requests.get(url)
+        recomovies = res.json().get('results')
+        if recomovies:
+            for recomovie in recomovies[:5]:
+                recogenres = recomovie['genre_ids']
+                for recogenre in recogenres:
+                    print(str(recogenre))
+                    print(user.user_genre.keys())
+                    if str(recogenre) in user.user_genre.keys():
+                        user.user_genre[str(recogenre)] += 1
+    user.save()
+    genres = get_list_or_404(Genre)
+    user.reco_movies.clear()
+    movie_list = []
+    best_genre1 = get_object_or_404(Genre, pk=1)
+    best_genre2 = get_object_or_404(Genre, pk=2)
+    if user.user_genre[str(best_genre1.genre_id)] < user.user_genre[str(best_genre2.genre_id)]:
+        best_genre1 = get_object_or_404(Genre, pk=2)
+        best_genre2 = get_object_or_404(Genre, pk=1)
+    for genre in genres:
+        if user.user_genre[str(genre.genre_id)] > user.user_genre[str(best_genre2.genre_id)]:
+            if user.user_genre[str(genre.genre_id)] > user.user_genre[str(best_genre1.genre_id)]:
+                best_genre2 = best_genre1
+                best_genre1 = genre
+            else:
+                best_genre2 = genre
+        if genre.movies.all():
+            genre_movies = genre.movies.order_by('?')[:user.user_genre[str(genre.genre_id)]]
+            for genre_movie in genre_movies:
+                movie_list.append(genre_movie)
+    user.best_genres.clear()
+    user.best_genres.add(best_genre1)
+    user.best_genres.add(best_genre2)
+    movies = set(movie_list)
+    movie_list = list(movies)
+    random.shuffle(movie_list)
+    for movie in movie_list[:16]:
+        user.reco_movies.add(movie)
+    user.save()
+    return Response(status=status.HTTP_201_CREATED)
 
 # 영화 목록 조회
 @api_view(['GET'])
 def movie_list(request):
-    # movies = get_list_or_404(Movie)
-    movies = Movie.objects.order_by('?')[:60]
+    movies = Movie.objects.order_by('?')[:50]
     serializer = MovieSerializer(movies, many=True)
     return Response(serializer.data)
 
@@ -109,12 +139,10 @@ def movie_vote(request, movie_pk):
                 moviescore = get_object_or_404(MovieScore, user=user, movie=movie)
                 serializer = MovieScoreSerializer(moviescore)
                 return Response(serializer.data)
-            else:
-                data = {
-                    'score': 0,
-                }
-                return Response(data)
-        return Response(status=401)
+        data = {
+            'score': 0,
+        }
+        return Response(data)
 
     # 영화 평점 추가
     elif request.method == 'POST':
@@ -135,21 +163,20 @@ def movie_vote(request, movie_pk):
         else:
             return Response(status=401)
 
-        # 영화 평점 데이터에 반영
-        moviescores = MovieScore.objects.all().filter(movie=movie)
-        total = 0
-        for movescore in moviescores:
-            total += movescore.score
-        movie.score = ((movie.origin_score * 10) + total) / (len(moviescores) + 10)
-        movie.score_count = len(moviescores) + 10
-        movie.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    # 영화 평점 데이터에 반영
+    moviescores = MovieScore.objects.all().filter(movie=movie)
+    total = 0
+    for movescore in moviescores:
+        total += movescore.score
+    movie.score = ((movie.origin_score * 10) + total) / (len(moviescores) + 10)
+    movie.score_count = len(moviescores) + 10
+    movie.save()
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 # 영화 좋아요
 @api_view(['POST'])
 def movie_like(request, movie_pk):
     movie = get_object_or_404(Movie, pk=movie_pk)
-    # if request.user.is_authenticated:
     user = request.user
     if movie.like_users.filter(pk=user.pk).exists():
         movie.like_users.remove(user)
@@ -204,7 +231,7 @@ def new(request):
 @api_view(['GET'])
 def genre_movies(request, genre_pk):
     genre = get_object_or_404(Genre, pk=genre_pk)
-    movies = genre.movies.all().order_by('?')
+    movies = genre.movies.all().order_by('?')[:30]
     serializer = MovieSerializer(movies, many=True)
     return Response(serializer.data)
 
@@ -255,41 +282,48 @@ def tindermovie(request):
 # DB 구성 페이지
 @api_view(['GET'])
 def create(request):
-    API_KEY = "41c1e2697868f05090a2fb5fd80bad45"
+    pass
+    # API_KEY = "41c1e2697868f05090a2fb5fd80bad45"
 
-    url = f'https://api.themoviedb.org/3/genre/movie/list?api_key={API_KEY}&language=ko-KR'
-    movie_response = requests.get(url).json()
+    # url = f'https://api.themoviedb.org/3/genre/movie/list?api_key={API_KEY}&language=ko-KR'
+    # movie_response = requests.get(url).json()
 
-    for tmdb_movie in movie_response['genres']:
-        genre = Genre()
-        genre.genre_id = tmdb_movie['id']
-        genre.name = tmdb_movie['name']
-        genre.save()
+    # for tmdb_movie in movie_response['genres']:
+    #     if len(Genre.objects.all()) == 13:
+    #         break
+    #     if tmdb_movie['id'] in [99, 36, 10402, 10770, 10752, 37]:
+    #         continue
+    #     genre = Genre()
+    #     genre.genre_id = tmdb_movie['id']
+    #     genre.name = tmdb_movie['name']
+    #     genre.save()
 
-    for i in range(1, 16):
-        url = f'https://api.themoviedb.org/3/movie/popular?api_key={API_KEY}&language=ko-KR&page={i}&region=KR'
-        movie_response = requests.get(url).json()
-        for tmdb_movie in movie_response['results']:
-            movie = Movie()
-            movie.title = tmdb_movie['title']
-            movie.movie_id = tmdb_movie['id']
-            movie.adult = tmdb_movie['adult']
-            movie.overview = tmdb_movie['overview']
-            movie.score = tmdb_movie['vote_average']
-            movie.score_count = 10
-            movie.origin_score = movie.score
-            movie.release_date = tmdb_movie['release_date']
-            movie.poster_path = tmdb_movie['poster_path']
-            movie.save()
+    # for i in range(1, 16):
+    #     if len(Movie.objects.all()) == 300:
+    #         break
+    #     url = f'https://api.themoviedb.org/3/movie/popular?api_key={API_KEY}&language=ko-KR&page={i}&region=KR'
+    #     movie_response = requests.get(url).json()
+    #     for tmdb_movie in movie_response['results']:
+    #         movie = Movie()
+    #         movie.title = tmdb_movie['title']
+    #         movie.movie_id = tmdb_movie['id']
+    #         movie.adult = tmdb_movie['adult']
+    #         movie.overview = tmdb_movie['overview']
+    #         movie.score = tmdb_movie['vote_average']
+    #         movie.score_count = 10
+    #         movie.origin_score = movie.score
+    #         movie.release_date = tmdb_movie['release_date']
+    #         movie.poster_path = tmdb_movie['poster_path']
+    #         movie.save()
 
-    movies = Movie.objects.all()
-    genres = Genre.objects.all()
-    for move in movies:
-        url = f'https://api.themoviedb.org/3/movie/{move.movie_id}?api_key=41c1e2697868f05090a2fb5fd80bad45&language=ko-KR'
-        movie_response = requests.get(url).json()
-        for tmdb in movie_response['genres']:
-            for gen in genres:
-                if tmdb['name'] == gen.name:
-                    gen.movies.add(move.id)
-    serializer = MovieSerializer(movies, many=True)
-    return Response(serializer.data)
+    # movies = Movie.objects.all()
+    # genres = Genre.objects.all()
+    # for move in movies:
+    #     url = f'https://api.themoviedb.org/3/movie/{move.movie_id}?api_key=41c1e2697868f05090a2fb5fd80bad45&language=ko-KR'
+    #     movie_response = requests.get(url).json()
+    #     for tmdb in movie_response['genres']:
+    #         for gen in genres:
+    #             if tmdb['name'] == gen.name:
+    #                 gen.movies.add(move.id)
+    # serializer = MovieSerializer(movies, many=True)
+    # return Response(serializer.data)

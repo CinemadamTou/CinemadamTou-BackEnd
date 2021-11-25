@@ -47,10 +47,38 @@ def profile(request, user_pk):
     data = []
     serializer = UserProfileSerializer(user)
     data.append(serializer.data)
-    movies = user.like_movies.all()
-    serializer = MovieSerializer(movies, many=True)
+    like_movies = user.like_movies.all()
+    serializer = MovieSerializer(like_movies, many=True)
+    data.append(serializer.data)
+    reco_movies = user.reco_movies.all()
+    serializer = MovieSerializer(reco_movies, many=True)
     data.append(serializer.data)
     return Response(data)
+
+# 사용자 프로필 사진 업로드
+@api_view(['POST'])
+def upload_profile_image(request):
+    src = request.FILES['image']
+    user = request.user
+    user.img = src
+    user.save()
+    return Response(status=201)
+
+# 사용자 문구 저장
+@api_view(['POST'])
+def set_user_phrase(request):
+    user = request.user
+    user.user_phrase = request.data['phrase']
+    user.save()
+    return Response(status=201)
+
+# 사용자 자기소개 변경
+@api_view(['POST'])
+def change_user_intro(request):
+    user = request.user
+    user.user_intro = request.data['intro']
+    user.save()
+    return Response(status=201)
 
 # 사용자 팔로우
 @api_view(['POST'])
